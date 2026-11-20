@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#03202f">
+<title>Draw Together</title>
+<link rel="stylesheet" href="css/lagoon.css?v=202611091342">
+<style>
+html,body{height:100%;overflow:hidden}
+#tank{position:fixed;inset:0;width:100%;height:100%;display:block}
+.chrome{transition:opacity .5s}
+body.idle .chrome{opacity:0;pointer-events:none}
+
+/* Soft & bubbly, compact: small corner pieces so the tank keeps the screen.
+   Sizes follow screen height so it reads the same on a laptop, TV or projector. */
+.brand{position:fixed;top:calc(2vh + env(safe-area-inset-top,0px));left:calc(1.8vw + env(safe-area-inset-left,0px));z-index:5;
+  display:flex;align-items:center;gap:1vh;flex-wrap:wrap}
+.brand b{font:700 clamp(18px,3.5vh,42px)/1 var(--display);color:var(--cream);-webkit-text-stroke:clamp(3px,.6vh,7px) var(--ink);paint-order:stroke fill;
+  text-shadow:0 .32vh 0 var(--ink)}
+.brand span,.chip{font:900 clamp(9px,1.25vh,14px)/1 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--ink);background:var(--butter);
+  padding:.6vh 1.1vh;border-radius:999px}
+.chip.warn{background:var(--cream)}
+.count{position:fixed;top:calc(2vh + env(safe-area-inset-top,0px));right:calc(1.8vw + env(safe-area-inset-right,0px));z-index:5;
+  font:700 clamp(14px,2.5vh,30px)/1 var(--display);color:var(--ink);background:var(--cream);padding:.7vh 1.5vh .8vh;border-radius:2vh;
+  box-shadow:0 .45vh 0 var(--ink)}
+.count small{font:900 clamp(8px,1.15vh,13px) var(--body);letter-spacing:.1em;text-transform:uppercase;margin-left:.5vh}
+
+/* QR card: compact by default; Host > Bigger QR code for big rooms */
+.qrcard{position:fixed;left:calc(1.8vw + env(safe-area-inset-left,0px));bottom:calc(2.4vh + env(safe-area-inset-bottom,0px));z-index:5;
+  display:flex;align-items:center;gap:1.5vh;background:var(--cream);color:var(--ink);border-radius:2.4vh;padding:1.2vh 2vh 1.2vh 1.2vh;
+  box-shadow:0 .6vh 0 var(--ink);max-width:calc(100% - 3.6vw)}
+.qrcard canvas{width:clamp(96px,16vh,200px);height:clamp(96px,16vh,200px);image-rendering:pixelated;display:block;flex:none;border-radius:1vh}
+.qrcard h2{font:700 clamp(15px,3.1vh,36px)/1 var(--display);margin:0 0 .9vh;color:var(--ink)}
+.qrcard .steps{font:900 clamp(9px,1.25vh,14px)/1 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--ink);opacity:.7}
+.qrcard .code{display:block;margin-top:.9vh;font:900 clamp(8px,1.05vh,12px) var(--body);letter-spacing:.16em;text-transform:uppercase;opacity:.45}
+body.bigqr .qrcard{gap:2.4vh;padding:1.8vh 3vh 1.8vh 1.8vh;border-radius:3.4vh}
+body.bigqr .qrcard canvas{width:clamp(120px,26vh,300px);height:clamp(120px,26vh,300px)}
+body.bigqr .qrcard h2{font-size:clamp(20px,4.8vh,54px)}
+body.bigqr .qrcard .steps{font-size:clamp(10px,1.8vh,19px)}
+
+.hostbtn{position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:6}
+
+.side{position:fixed;top:0;right:0;bottom:0;width:min(360px,100%);background:var(--panel);border-left:1px solid var(--line);z-index:30;
+  padding:calc(20px + env(safe-area-inset-top,0px)) calc(18px + env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) 18px;
+  display:flex;flex-direction:column;gap:12px;overflow:auto;box-shadow:-20px 0 60px rgba(0,0,0,.4)}
+.side header{display:flex;justify-content:space-between;align-items:center}
+.side h2{font-size:26px}
+.side .grp{display:grid;gap:8px}
+.side .btn{justify-content:flex-start;width:100%}
+.side .note{font-size:13px;color:var(--muted)}
+.x{background:none;border:0;color:var(--foam);font-size:28px;line-height:1;cursor:pointer;padding:4px 8px;border-radius:8px}
+
+.banner{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;gap:12px;align-items:center;background:var(--danger);color:#2a0308;font-weight:800;padding:8px 8px 8px 18px;border-radius:999px;max-width:calc(100% - 32px)}
+.banner .btn{padding:9px 14px;font-size:14px;background:#2a0308;color:var(--foam);border-color:#2a0308}
+
+.station{position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(88px + env(safe-area-inset-bottom,0px));z-index:20;
+  width:min(380px,calc(100% - 36px));background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px;display:grid;gap:10px;
+  box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.station header{display:flex;justify-content:space-between;align-items:center}
+.station h3{font-size:19px}
+.station video{width:100%;aspect-ratio:4/3;max-width:100%;object-fit:cover;border-radius:12px;background:#000;display:block}
+.station .status{font-size:14px;color:var(--muted);min-height:1.4em}
+
+.overlay{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(2,16,24,.62);
+  padding:20px max(16px,env(safe-area-inset-right,0px)) 20px max(16px,env(safe-area-inset-left,0px))}
+.card{width:min(560px,100%);max-height:calc(100vh - 40px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:28px;display:grid;gap:16px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.card h1{font-size:clamp(34px,6vw,52px);line-height:1}
+.card h2{font-size:28px}
+.card p{color:var(--muted)}
+.card .row{display:flex;gap:10px;flex-wrap:wrap}
+.card ol{margin:0;padding-left:22px;display:grid;gap:6px;line-height:1.4}
+.reel{display:grid;gap:10px}
+.reel img{width:100%;max-width:100%;border-radius:14px;display:block}
+.reel .note{font-size:14px;color:var(--muted)}
+.bar{height:10px;border-radius:999px;background:rgba(234,252,255,.15);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--sand);transition:width .2s}
+.demo{background:rgba(226,196,138,.12);border:1px solid rgba(226,196,138,.4);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45}
+</style>
+<script src="config.js?v=202611091342"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="vendor/qrcode.js?v=202611091342"></script>
+<script src="js/shark-core.js?v=202611091342"></script>
+<script src="js/net.js?v=202611091342"></script>
+<script src="vendor/gifenc.js?v=202611091342"></script>
+<script src="js/reel.js?v=202611091342"></script>
+</head>
+<body>
+<canvas id="tank" aria-label="Aquarium with swimming sharks"></canvas>
+
+<div class="brand">
+  <b>Draw Together</b><span>Shark Lagoon</span><span class="chip warn" id="demoPill" hidden>Demo mode</span>
+</div>
+<div class="count" id="count">0<small>sharks</small></div>
+
+<div class="qrcard" id="qrcard" hidden>
+  <canvas id="qr" width="400" height="400" aria-label="QR code to send a shark"></canvas>
+  <div>
+    <h2>Add your shark!</h2>
+    <div class="steps">Color &middot; Snap &middot; Swim</div>
+    <span class="code" id="code"></span>
+  </div>
+</div>
+
+<button class="btn hostbtn chrome" id="hostBtn" aria-label="Host controls" hidden>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+  Host
+</button>
+
+<aside class="side" id="side" hidden aria-label="Host controls">
+  <header><h2>Host controls</h2><button class="x" id="sideX" aria-label="Close">×</button></header>
+  <div class="grp">
+    <span class="eyebrow">Screen</span>
+    <button class="btn" id="fsBtn">Full screen</button>
+    <button class="btn" id="bigQrBtn" aria-pressed="false">Bigger QR code</button>
+  </div>
+  <div class="grp">
+    <span class="eyebrow">Add sharks here</span>
+    <button class="btn" id="stationBtn">Scan station (camera)</button>
+    <input type="file" id="file" accept="image/*" class="vh">
+    <label class="btn" for="file" role="button" tabindex="0" id="uploadBtn">Upload a photo of a sheet</label>
+    <p class="note">Use these when phones can't connect, or for kids without a parent's phone.</p>
+  </div>
+  <div class="grp">
+    <span class="eyebrow">Keep it friendly</span>
+    <button class="btn" id="removeBtn">Remove a shark</button>
+  </div>
+  <div class="grp">
+    <span class="eyebrow">Supplies</span>
+    <a class="btn" href="sheet.html" target="_blank" rel="noopener">Print coloring sheets</a>
+  </div>
+  <div class="grp" style="margin-top:auto">
+    <button class="btn danger" id="endBtn">End event</button>
+  </div>
+</aside>
+
+<div class="banner" id="removeBanner" hidden>Tap a shark to remove it <button class="btn" id="removeDone">Done</button></div>
+
+<section class="station" id="station" hidden aria-label="Scan station">
+  <header><h3>Scan station</h3><button class="x" id="stationX" aria-label="Close scan station">×</button></header>
+  <video id="video" playsinline muted></video>
+  <button class="btn primary block" id="snapBtn">Scan this sheet</button>
+  <p class="status" id="stationStatus">Hold the sheet flat under the camera with all 4 corner squares showing.</p>
+</section>
+
+<div class="overlay" id="startOv" hidden>
+  <div class="card">
+    <span class="eyebrow">Event screen · Shark Lagoon</span>
+    <h1>Draw Together</h1>
+    <ol>
+      <li>Put this screen on a projector or TV and set out the coloring sheets.</li>
+      <li>Kids color a shark. A grown-up scans the QR code and snaps a photo.</li>
+      <li>The shark swims into the tank.</li>
+    </ol>
+    <div class="demo" id="demoNote" hidden><b>Demo mode.</b> Phone scanning isn't set up yet, so the QR code only works in another tab of this browser. You can still add sharks with the scan station or a photo upload. Setup steps are in the README.</div>
+    <div class="row">
+      <button class="btn primary big" id="startBtn">Start an event</button>
+      <a class="btn" href="sheet.html" target="_blank" rel="noopener">Print coloring sheets</a>
+    </div>
+    <p class="err" id="startErr" hidden></p>
+  </div>
+</div>
+
+<div class="overlay" id="endOv" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+    <h2 id="endTitle">End the event?</h2>
+    <p>Every shark swims one last lap across the screen. Then the QR code stops working, all drawings are deleted online, and you get a reel of every drawing to download.</p>
+    <div class="row"><button class="btn" id="endNo">Keep swimming</button><button class="btn danger" id="endYes">End event</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="doneOv" hidden>
+  <div class="card">
+    <h1>Thanks for swimming with us!</h1>
+    <p id="doneText">The event is over and its drawings are deleted.</p>
+    <div class="reel" id="reelBox" hidden>
+      <img id="reelImg" alt="Animated reel of every shark from this event" hidden>
+      <div class="bar" id="reelBar" aria-hidden="true"><i id="reelFill"></i></div>
+      <p class="note" id="reelStatus">Making the event reel…</p>
+      <div class="row"><button class="btn primary" id="reelSave" hidden>Download the reel</button></div>
+    </div>
+    <div class="row"><button class="btn big" id="againBtn">Start a new event</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+'use strict';
+var C = SharkCore, Net = SharkNet, $ = function(id){ return document.getElementById(id); };
+var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+var MAX_VISIBLE = 24, ROTATE_EVERY = 22, EVENT_KEY = 'shark-event';
+
+/* ---------- canvas ---------- */
+var tank = $('tank'), ctx = tank.getContext('2d'), W = 0, H = 0, DPR = 1;
+function resize(){ DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; tank.width = Math.round(W*DPR); tank.height = Math.round(H*DPR); }
+addEventListener('resize', resize); resize();
+var scene = C.makeScene();
+function bs(){ return Math.max(.38, Math.min(1.25, Math.min(W/1050, H/620))); }
+
+/* ---------- state ---------- */
+var eventId = null, unwatch = null, quietUntil = 0, beatT = null, allRecs = {};
+var fish = [], queue = [], bubbles = [], T = 0, rotateT = 0, parade = null, removeMode = false;
+function total(){ return fish.filter(function(f){ return !f.gone; }).length + queue.length; }
+function updateCount(){ var n = total(); $('count').innerHTML = n + '<small>' + (n === 1 ? 'shark' : 'sharks') + '</small>'; }
+
+function makeFish(rec, mode){
+  var img = new Image(); img.src = rec.img;
+  var s = 0.78 + Math.random()*0.38, dir = Math.random() < .5 ? -1 : 1;
+  var f = { key: rec.key, img: img, s3d: C.Shark3D ? new C.Shark3D(img, { scale: Math.min(3, 1.4*DPR) }) : null, rec: rec, size: s, dir: dir, turn: dir, x: W*(.12 + Math.random()*.76),
+    baseY: H*(.18 + Math.random()*.55), targetY: H*(.18 + Math.random()*.55), y: 0,
+    speed: (36 + Math.random()*28) * (reduce ? .5 : 1), phase: Math.random()*6, seed: Math.random()*99,
+    dash: 0, glow: 0, pop: 1, born: T, leaving: 0, gone: false };
+  if (mode === 'enter' || mode === 'swimin'){
+    f.dir = f.turn = pickDir(f); f.x = f.dir > 0 ? -170 : W + 170; f.baseY = f.targetY = H*(.3 + Math.random()*.3);
+    if (mode === 'enter'){ f.glow = 7; f.pop = 1.7; f.dash = 1.4; }
+  }
+  f.y = f.baseY;
+  return f;
+}
+function visible(){ return fish.filter(function(f){ return !f.gone && !f.leaving; }); }
+
+function addShark(rec){
+  if (rec && rec.key && rec.img && !parade) allRecs[rec.key] = rec.img;
+  if (fish.some(function(f){ return f.key === rec.key; }) || queue.some(function(q){ return q.key === rec.key; })) return;
+  var quiet = performance.now() < quietUntil;
+  if (parade){ return; }
+  if (quiet && visible().length >= MAX_VISIBLE){ queue.push(rec); updateCount(); return; }
+  if (!quiet && visible().length >= MAX_VISIBLE) sendOff(oldest());
+  var f = makeFish(rec, quiet ? 'place' : 'enter');
+  fish.push(f);
+  if (!quiet) bubble(40, f.baseY, 26);
+  updateCount();
+}
+function oldest(){ var all = visible(), v = all.filter(function(f){ return f.glow <= 0; }); if (!v.length) v = all; v.sort(function(a,b){ return a.born - b.born; }); return v[0]; }
+function pickDir(self){
+  var r = 0, l = 0;
+  fish.forEach(function(o){ if (o !== self && !o.gone && !(o.away > 0)) { if (o.dir > 0) r++; else l++; } });
+  var pRight = .5 + Math.max(-.3, Math.min(.3, (l - r) * .08));   // lean toward the less common direction
+  return Math.random() < pRight ? 1 : -1;
+}
+function sendOff(f){ if (!f) return; f.leaving = f.dir; f.away = 0; f.dash = 1; }
+function removeShark(key, animate){
+  delete allRecs[key];
+  queue = queue.filter(function(q){ return q.key !== key; });
+  fish.forEach(function(f){ if (f.key === key && !f.gone){ if (animate !== false) bubble(f.x, f.y, 30); f.gone = true; } });
+  fish = fish.filter(function(f){ return !f.gone; });
+  updateCount();
+}
+
+/* ---------- motion ---------- */
+function bubble(x, y, n){ for (var i=0;i<n;i++) bubbles.push({x:x+(Math.random()-.5)*30, y:y+(Math.random()-.5)*30, r:2+Math.random()*6, v:30+Math.random()*60, ph:Math.random()*6}); }
+
+function step(dt){
+  var b = bs();
+  fish.forEach(function(f){
+    var sc = b*f.size, m = 110*sc;
+    f.phase += dt*(4 + f.dash*10);
+    f.dash = Math.max(0, f.dash - dt*.5);
+    f.glow = Math.max(0, f.glow - dt);
+    f.pop += (1 - f.pop) * Math.min(1, dt*.8);
+    var v = f.speed*b*(1 + f.dash*3) * (parade ? 2.2 : f.leaving ? 3 : 1);
+    // no turning for now: sharks swim off one edge, wait a few seconds, and come back in on the other side
+    var off = 150*sc;
+    if (f.away > 0){
+      f.away -= dt;
+      // while off screen, pick a direction at random (keeping the two directions balanced), so sharks
+      // come back left-to-right or right-to-left; the turn happens out of sight
+      if (f.away <= 0){ f.dir = f.turn = pickDir(f); f.x = f.dir > 0 ? -off : W + off; f.baseY = f.targetY = H*(.16 + Math.random()*.6); }
+      f.turn = f.dir; return;
+    }
+    if (!f.leaving && !parade){
+      if (Math.random() < dt*.15) f.targetY = H*(.16 + Math.random()*.6);
+      if ((f.dir > 0 && f.x > W + off) || (f.dir < 0 && f.x < -off)) { f.away = 2 + Math.random()*4; f.turn = f.dir; return; }
+    }
+    f.turn = f.dir;
+    f.x += v*dt*f.dir;
+    f.baseY += (f.targetY - f.baseY) * dt * .25;
+    f.y = f.baseY + Math.sin(T*.6 + f.seed)*14*b;
+    if (Math.random() < dt*.25) bubble(f.x + f.turn*95*sc, f.y - 5*sc, 1);
+    if ((f.leaving || parade) && (f.x > W + 200 || f.x < -200)){
+      f.gone = true;
+      if (f.leaving && !parade) queue.push(f.rec);
+    }
+  });
+  fish = fish.filter(function(f){ return !f.gone; });
+  bubbles.forEach(function(p){ p.y -= p.v*dt; p.x += Math.sin(T*3 + p.ph)*.4; });
+  bubbles = bubbles.filter(function(p){ return p.y > -10; });
+
+  if (parade) paradeStep(dt);
+  else {
+    rotateT += dt;
+    var room = MAX_VISIBLE - visible().length;
+    if (room < 0){ sendOff(oldest()); }
+    else if (queue.length && room > 0 && rotateT > 1.5){ rotateT = 0; fish.push(makeFish(queue.shift(), 'swimin')); }
+    else if (queue.length && rotateT > ROTATE_EVERY){ rotateT = 0; sendOff(oldest()); }
+  }
+}
+
+function render(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  scene(ctx, W, H, T);
+  var b = bs();
+  fish.slice().sort(function(a,c){ return a.size - c.size; }).forEach(function(f){
+    var sc = b*f.size*f.pop;
+    ctx.save(); ctx.translate(f.x, f.y);
+    if (f.glow > 0){
+      var a = Math.min(1, f.glow/2) * (.55 + .25*Math.sin(T*6));
+      var g = ctx.createRadialGradient(0,0,10*sc,0,0,150*sc);
+      g.addColorStop(0, 'rgba(255,240,180,' + a + ')'); g.addColorStop(1, 'rgba(255,240,180,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0,0,160*sc,110*sc,0,0,7); ctx.fill();
+    }
+    if (removeMode){ ctx.strokeStyle = 'rgba(255,93,108,.9)'; ctx.lineWidth = 3; ctx.setLineDash([8,6]); ctx.beginPath(); ctx.ellipse(0,0,120*sc,62*sc,0,0,7); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.rotate(Math.sin(T*.6 + f.seed)*.05*f.turn);
+    ctx.scale(sc, sc);
+    var haze = Math.max(0, Math.min(.22, (1 - f.size)*.8));
+    try {
+      if (f.s3d) f.s3d.draw(ctx, f.turn, f.phase, haze, .14*Math.sin(T*.45 + f.seed));
+      else { ctx.scale(f.turn < 0 ? -1 : 1, 1); C.drawShark(ctx, f.img, Math.sin(f.phase)*8); }
+    } catch (e) { f.s3d = null; }
+    ctx.restore();
+  });
+  scene.front(ctx, W, H, T);
+  ctx.fillStyle = 'rgba(234,252,255,.55)'; ctx.strokeStyle = 'rgba(234,252,255,.8)'; ctx.lineWidth = 1;
+  bubbles.forEach(function(p){ ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.globalAlpha=.35; ctx.fill(); ctx.globalAlpha=.8; ctx.stroke(); });
+  ctx.globalAlpha = 1;
+  if (parade){
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = Math.round(Math.min(W*.07, 84)) + 'px "Lilita One", "Arial Rounded MT Bold", sans-serif';
+    ctx.fillStyle = 'rgba(3,32,47,.35)'; ctx.fillText('Thanks for swimming with us!', W/2 + 3, H*.16 + 4);
+    ctx.fillStyle = '#eafcff'; ctx.fillText('Thanks for swimming with us!', W/2, H*.16);
+    ctx.textAlign = 'start';
+  }
+}
+
+var last = performance.now();
+function loop(now){ var dt = Math.min(.05, (now-last)/1000); last = now; T += dt; try { step(dt); render(); } catch (e) { if (window.console) console.error(e); } requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+
+/* ---------- goodbye parade ---------- */
+function startParade(done){
+  var line = queue.slice(0, 60); queue = [];
+  fish.forEach(function(f){ f.leaving = f.dir; f.away = 0; });
+  var lanes = 5, i = 0;
+  parade = { left: line, t: 0, done: done, spawned: 0, lane: function(){ return H*(.28 + (i++ % lanes)*.12); } };
+  if (!fish.length && !line.length) setTimeout(finishParade, 1200);
+}
+function paradeStep(dt){
+  parade.t += dt;
+  if (parade.left.length && parade.t > .55){
+    parade.t = 0;
+    var f = makeFish(parade.left.shift(), 'swimin'); f.baseY = f.targetY = parade.lane(); f.leaving = 1;
+    fish.push(f);
+  }
+  if (!parade.left.length && !fish.length) finishParade();
+}
+function finishParade(){ if (!parade) return; var d = parade.done; parade = null; d && d(); }
+
+/* ---------- event lifecycle ---------- */
+function drawQR(text){
+  var q = qrcode(0, 'M'); q.addData(text); q.make();
+  var n = q.getModuleCount(), cv = $('qr'), g = cv.getContext('2d'), pad = 2, cell = Math.floor(cv.width/(n + pad*2));
+  var off = Math.floor((cv.width - cell*(n + pad*2))/2);
+  g.fillStyle = '#ffffff'; g.fillRect(0,0,cv.width,cv.height); g.fillStyle = '#13294b';
+  for (var r=0;r<n;r++) for (var c=0;c<n;c++) if (q.isDark(r,c)) g.fillRect(off + (c+pad)*cell, off + (r+pad)*cell, cell, cell);
+}
+function scanUrl(id){ var u = new URL('scan.html', location.href); u.search = '?e=' + id; u.hash = ''; return u.href; }
+
+function openEvent(id){
+  eventId = id;
+  try { localStorage.setItem(EVENT_KEY, id); } catch(e){}
+  drawQR(scanUrl(id));
+  $('code').textContent = 'Event ' + id.replace(/^demo/, 'demo-');
+  $('qrcard').hidden = false; $('hostBtn').hidden = false; $('startOv').hidden = true; $('doneOv').hidden = true;
+  fish = []; queue = []; allRecs = {}; updateCount();
+  quietUntil = performance.now() + 2500;
+  if (unwatch) unwatch();
+  clearInterval(beatT);
+  Net.heartbeat(id).catch(function(){});
+  beatT = setInterval(function(){ if (eventId === id) Net.heartbeat(id).catch(function(){}); }, 20000);
+  unwatch = Net.watch(id, {
+    add: addShark,
+    remove: function(k){ removeShark(k); },
+    end: function(){ if (!parade && eventId === id) endLocal(false); }
+  });
+}
+function showStart(){
+  $('qrcard').hidden = true; $('hostBtn').hidden = true; $('startOv').hidden = false;
+  $('demoNote').hidden = Net.live; $('demoPill').hidden = Net.live;
+}
+$('startBtn').onclick = function(){
+  var b = this; b.disabled = true; b.textContent = 'Starting…';
+  Net.createEvent().then(openEvent, function(){
+    $('startErr').hidden = false;
+    $('startErr').textContent = "Couldn't start the event. Check the internet connection and the Firebase setup in config.js, then try again.";
+  }).then(function(){ b.disabled = false; b.textContent = 'Start an event'; });
+};
+$('againBtn').onclick = function(){ $('doneOv').hidden = true; $('startBtn').click(); };
+
+function endLocal(fromHost){
+  if (unwatch){ unwatch(); unwatch = null; }
+  clearInterval(beatT);
+  var id = eventId; eventId = null;
+  try { localStorage.removeItem(EVENT_KEY); } catch(e){}
+  $('qrcard').hidden = true; $('hostBtn').hidden = true; closeSide(); setRemove(false); closeStation();
+  var reelSrcs = Object.keys(allRecs).map(function(k){ return allRecs[k]; }); allRecs = {};
+  startParade(function(){
+    if (fromHost) Net.destroy(id).catch(function(){});
+    fish = []; queue = []; updateCount();
+    $('doneOv').hidden = false;
+    buildReel(reelSrcs);
+  });
+}
+/* event reel: a GIF of every drawing, made on this laptop before anything else happens */
+var reelUrl = null;
+function buildReel(srcs){
+  if (reelUrl){ URL.revokeObjectURL(reelUrl); reelUrl = null; }
+  $('reelImg').hidden = true; $('reelSave').hidden = true; $('reelBar').hidden = false; $('reelFill').style.width = '0';
+  if (!srcs.length || !window.SharkReel){ $('reelBox').hidden = true; return; }
+  $('reelBox').hidden = false; $('reelStatus').textContent = 'Making the event reel of all ' + srcs.length + (srcs.length === 1 ? ' shark…' : ' sharks…');
+  $('doneText').textContent = 'The event is over. Its drawings are deleted online, and the reel below is saved only on this laptop until you download it.';
+  SharkReel.makeReel(srcs, { onProgress: function(p){ $('reelFill').style.width = Math.round(p*100) + '%'; } }).then(function(blob){
+    reelUrl = URL.createObjectURL(blob);
+    $('reelImg').src = reelUrl; $('reelImg').hidden = false; $('reelBar').hidden = true; $('reelSave').hidden = false;
+    $('reelStatus').textContent = 'Every drawing from today, ready to share. ' + (blob.size/1048576).toFixed(1) + ' MB GIF.';
+  }, function(){ $('reelBar').hidden = true; $('reelStatus').textContent = "The reel couldn't be made on this computer."; });
+}
+$('reelSave').onclick = function(){
+  if (!reelUrl) return;
+  var a = document.createElement('a'); a.href = reelUrl;
+  a.download = 'draw-together-' + new Date().toISOString().slice(0,10) + '.gif';
+  document.body.appendChild(a); a.click(); a.remove();
+};
+$('endBtn').onclick = function(){ $('endOv').hidden = false; };
+$('endNo').onclick = function(){ $('endOv').hidden = true; };
+$('endYes').onclick = function(){
+  $('endOv').hidden = true;
+  var id = eventId;
+  Net.close(id).catch(function(){}).then(function(){ endLocal(true); });
+};
+
+/* resume after a refresh */
+(function boot(){
+  $('demoPill').hidden = Net.live;
+  var saved = null; try { saved = localStorage.getItem(EVENT_KEY); } catch(e){}
+  if (!saved){ showStart(); return; }
+  Promise.all([Net.isOpen(saved), Net.isOwner(saved)]).then(function(r){
+    if (r[0] && r[1]) openEvent(saved); else { try { localStorage.removeItem(EVENT_KEY); } catch(e){} showStart(); }
+  }, showStart);
+})();
+
+/* ---------- host controls ---------- */
+function openSide(){ $('side').hidden = false; }
+function closeSide(){ $('side').hidden = true; }
+$('hostBtn').onclick = openSide; $('sideX').onclick = closeSide;
+function setRemove(on){ removeMode = on; $('removeBanner').hidden = !on; }
+$('removeBtn').onclick = function(){ closeSide(); setRemove(true); };
+$('removeDone').onclick = function(){ setRemove(false); };
+
+tank.addEventListener('pointerdown', function(e){
+  wake();
+  var px = e.clientX, py = e.clientY, b = bs();
+  var hit = null;
+  fish.slice().sort(function(a,c){ return c.size - a.size; }).some(function(f){
+    var sc = b*f.size, dx = (px - f.x)/(115*sc), dy = (py - f.y)/(58*sc);
+    if (dx*dx + dy*dy < 1){ hit = f; return true; }
+  });
+  if (!hit) return;
+  if (removeMode){
+    var k = hit.key; removeShark(k);
+    if (eventId) Net.remove(eventId, k).catch(function(){ toast("That shark was removed here, but the online copy couldn't be deleted."); });
+    toast('Shark removed');
+  } else { hit.dash = 1; bubble(hit.x, hit.y, 10); }
+});
+
+/* scan station + upload (host adds) */
+function hostAddCanvasResult(res){
+  if (!res.ok){ return res; }
+  if (!eventId) return { ok:false, reason:'noevent' };
+  Net.hostAdd(eventId, res.dataUrl).then(function(key){
+    if (!Net.live) addShark({ key: key, img: res.dataUrl });
+  }, function(){ toast("Couldn't add that shark. Check the connection and try again."); });
+  return res;
+}
+var stream = null;
+function closeStation(){ $('station').hidden = true; if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; } }
+$('stationX').onclick = closeStation;
+$('stationBtn').onclick = function(){
+  closeSide();
+  $('station').hidden = false; $('stationStatus').textContent = 'Starting the camera…';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $('stationStatus').textContent = 'This browser has no camera access. Use "Upload a photo" instead.'; return; }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
+    .then(function(s){ stream = s; var v = $('video'); v.srcObject = s; v.play(); $('stationStatus').textContent = 'Hold the sheet flat under the camera with all 4 corner squares showing.'; })
+    .catch(function(){ $('stationStatus').textContent = 'The camera is blocked or missing. Allow camera access, or use "Upload a photo" instead.'; });
+};
+$('snapBtn').onclick = function(){
+  var v = $('video'); if (!v.videoWidth){ return; }
+  var r = hostAddCanvasResult(C.scanSheet(v));
+  $('stationStatus').textContent = r.ok ? 'Shark sent! Ready for the next sheet.' : (r.reason === 'noevent' ? 'Start an event first.' : C.reasonText(r.reason));
+};
+$('file').addEventListener('change', function(e){
+  var f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  var url = URL.createObjectURL(f), img = new Image();
+  img.onload = function(){ var r = hostAddCanvasResult(C.scanSheet(img)); URL.revokeObjectURL(url); toast(r.ok ? 'Shark sent into the tank!' : C.reasonText(r.reason)); };
+  img.onerror = function(){ toast("That file isn't a photo the browser can read. Try a JPG or PNG."); };
+  img.src = url;
+});
+$('uploadBtn').addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); $('file').click(); } });
+
+/* full screen, idle hiding, wake lock */
+var idleT, lock = null;
+function wake(){ document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(function(){ if ($('side').hidden && !removeMode) document.body.classList.add('idle'); }, 5000); }
+['pointermove','keydown','pointerdown'].forEach(function(t){ addEventListener(t, wake); }); wake();
+/* bigger QR code for big rooms (remembered on this laptop) */
+function setBigQr(on){ document.body.classList.toggle('bigqr', on); $('bigQrBtn').setAttribute('aria-pressed', String(on)); $('bigQrBtn').textContent = on ? 'Smaller QR code' : 'Bigger QR code'; try { localStorage.setItem('shark-bigqr', on ? '1' : ''); } catch(e){} }
+try { if (localStorage.getItem('shark-bigqr')) setBigQr(true); } catch(e){}
+$('bigQrBtn').onclick = function(){ setBigQr(!document.body.classList.contains('bigqr')); };
+$('fsBtn').onclick = function(){
+  var el = document.documentElement;
+  var p = document.fullscreenElement ? document.exitFullscreen() : (el.requestFullscreen ? el.requestFullscreen() : Promise.reject());
+  Promise.resolve(p).catch(function(){ toast('Full screen is not available in this browser.'); });
+  closeSide();
+};
+function keepAwake(){ if (navigator.wakeLock && document.visibilityState === 'visible') navigator.wakeLock.request('screen').then(function(l){ lock = l; }).catch(function(){}); }
+document.addEventListener('visibilitychange', keepAwake); keepAwake();
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape'){ closeSide(); setRemove(false); $('endOv').hidden = true; } });
+
+var toastT; function toast(m){ var t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function(){ t.hidden = true; }, 3400); }
+window.__lagoon = { dirs: function(){ var o = { right: 0, left: 0, away: 0 }; fish.forEach(function(f){ if (f.away > 0) o.away++; else if (f.dir > 0) o.right++; else o.left++; }); return o; }, fishes: function(){ return fish.map(function(f){ return { x: Math.round(f.x), turn: f.turn, away: f.away > 0 }; }); }, addShark: addShark, state: function(){ return { fish: fish.length, visible: visible().length, queue: queue.length, eventId: eventId }; } };
+})();
+</script>
+</body>
+</html>
